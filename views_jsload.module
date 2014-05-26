@@ -1,0 +1,131 @@
+<?php
+
+/*
+ * Implements hook_init()
+ */
+function views_jsload_init(){
+  drupal_add_js(drupal_get_path('module', 'views_jsload').'/views_jsload.js');
+}
+
+/*
+ * Implements hook_menu()
+ */
+function views_jsload_menu(){
+  $items = array();
+  $items['views_jsload/%'] = array(
+    'title' => 'Views JS Load',
+    'description' => 'Handler for JS loading',
+    'page callback' => 'views_jsload_callback',
+    'page arguments' => array(1),
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+  return $items;
+}
+
+/*
+ * Page callback
+ */
+function views_jsload_callback($name, $display_id = 'default'){
+  // protect from prying eyes
+  if (!isset($_GET['js']) || !isset($_GET['rand'])){
+    exit;
+  }
+  
+  $args = func_get_args();
+  array_shift($args); // remove $name
+  if (count($args)) {
+    array_shift($args); // remove $display_id
+  }
+
+  $view = views_get_view($name);
+  if (!$view || !$view->access($display_id)) {
+    exit();
+  }
+
+  // retain our current dom_id
+  if (isset($_GET['dom_id'])){
+    $view->dom_id = $_GET['dom_id'];
+  }
+  
+  $json = array(
+    'view_html' => $view->preview($display_id, $args),
+  );
+  
+  //return $json['view_html'];
+  print drupal_json($json);
+}
+
+/*
+ * Implements hook_view_pre_view
+ *   forces empty text on first load
+ */
+function views_jsload_views_pre_view(&$view, &$display_id, &$args) {
+  // only alter the view when not loaded through our route or the admin page
+  if (arg(0) != 'views_jsload' && !(arg(0) == 'admin' && arg(1) == 'build' && arg(2) == 'views'))
+  {
+    // look for appropriate css_class
+    if (isset($view->display[$display_id]->display_options['css_class'])){
+      $css_class = $view->display[$display_id]->display_options['css_class'];
+    }
+    else if (isset($view->display['default']->display_options['css_class'])) {
+      $css_class = $view->display['default']->display_options['css_class'];
+    }
+    
+    // look for custom class
+    if (isset($css_class) && strpos($css_class, 'views-jsload') !== FALSE){
+      // we need a very-unique dom_id
+      $view->dom_id = rand(1000, 10000);
+      // https://drupal.org/comment/1117046#comment-1117046
+      // add a null argument to force empty text to display
+      $view->add_item($display_id, 'argument', 'views', 'null', _views_jsload_null_argument_options());
+      // force empty text
+      $view->display[$display_id]->handler->set_option('empty', '&nbsp;'); 
+      $view->display[$display_id]->handler->set_option('empty_format', FILTER_FORMAT_DEFAULT); 
+    }
+  }
+}
+
+/*
+ * Generic global: null argument options
+ */
+function _views_jsload_null_argument_options(){
+  return array(
+    'default_action' => 'empty',
+    'style_plugin' => 'default_summary',
+    'style_options' => array(),
+    'wildcard' => 'all',
+    'wildcard_substitution' => 'All',
+    'title' => '',
+    'breadcrumb' => '',
+    'default_argument_type' => 'fixed',
+    'default_argument' => '',
+    'validate_type' => 'none',
+    'validate_fail' => 'not found',
+    'must_not_be' => 0,
+    'id' => 'null',
+    'table' => 'views',
+    'field' => 'null',
+    'validate_user_argument_type' => 'uid',
+    'validate_user_roles' => array(),
+    'relationship' => 'none',
+    'default_options_div_prefix' => '',
+    'default_taxonomy_tid_term_page' => 0,
+    'default_taxonomy_tid_node' => 0,
+    'default_taxonomy_tid_limit' => 0,
+    'default_taxonomy_tid_vids' => array(),
+    'default_argument_user' => 0,
+    'default_argument_fixed' => '',
+    'default_argument_image_size' => '_original',
+    'default_argument_php' => '',
+    'validate_argument_node_type' => array(),
+    'validate_argument_node_access' => 0,
+    'validate_argument_nid_type' => 'nid',
+    'validate_argument_vocabulary' => array(),
+    'validate_argument_type' => 'tid',
+    'validate_argument_transform' => 0,
+    'validate_user_restrict_roles' => 0,
+    'image_size' => array(),
+    'validate_argument_php' => '',
+  );
+}
